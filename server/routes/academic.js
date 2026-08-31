@@ -71,6 +71,48 @@ router.put('/years/configure/:id', async (req, res) => {
     }
 });
 
+// Update Active Year Dates (allow editing dates of active year)
+router.put('/years/update-active/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { start_date, end_date } = req.body;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json({ error: 'Start date and end date are required' });
+        }
+
+        // Check if year exists and is active
+        const yearCheck = await pool.query(
+            'SELECT id, status, year_name FROM academic_years WHERE id = $1',
+            [id]
+        );
+
+        if (yearCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Academic year not found' });
+        }
+
+        if (yearCheck.rows[0].status !== 'active') {
+            return res.status(400).json({ 
+                error: 'Can only update dates for active year. This year is ' + yearCheck.rows[0].status 
+            });
+        }
+
+        // Update year dates
+        const result = await pool.query(
+            `UPDATE academic_years 
+             SET start_date = $1, end_date = $2
+             WHERE id = $3 
+             RETURNING *`,
+            [start_date, end_date, id]
+        );
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
 // Activate Year (make a configured year active)
 router.put('/years/activate/:id', async (req, res) => {
     const client = await pool.connect();

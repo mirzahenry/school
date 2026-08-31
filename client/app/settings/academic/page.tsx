@@ -35,7 +35,7 @@ export default function AcademicSetup() {
         { term_name: 'First Term', has_summer_work: false, has_winter_work: false },
         { term_name: 'Final Term', has_summer_work: false, has_winter_work: false }
     ]);
-    const [mode, setMode] = useState<'view' | 'configure' | 'activate' | 'terms'>('view');
+    const [mode, setMode] = useState<'view' | 'configure' | 'activate' | 'terms' | 'edit-active'>('view');
 
     // Helper: Validate Dates based on Year Name (e.g., "2025-2026")
     const getMinMaxDates = (yearName: string | undefined) => {
@@ -305,9 +305,22 @@ export default function AcademicSetup() {
                                         </div>
 
                                         <div className="mt-4 pt-3 border-top">
-                                            <button className="btn btn-secondary-custom" onClick={() => setMode('terms')}>
-                                                <i className="bi bi-calendar3 me-2"></i>Manage Terms & Exams
-                                            </button>
+                                            <div className="d-flex gap-2 flex-wrap">
+                                                {hasPermission('settings', 'write') && (
+                                                    <button className="btn btn-outline-primary" onClick={() => {
+                                                        setActivationData({ 
+                                                            start_date: selectedYear.start_date || '', 
+                                                            end_date: selectedYear.end_date || '' 
+                                                        });
+                                                        setMode('edit-active');
+                                                    }}>
+                                                        <i className="bi bi-pencil me-2"></i>Edit Dates
+                                                    </button>
+                                                )}
+                                                <button className="btn btn-secondary-custom" onClick={() => setMode('terms')}>
+                                                    <i className="bi bi-calendar3 me-2"></i>Manage Terms & Exams
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -388,7 +401,90 @@ export default function AcademicSetup() {
                             </div>
                         )}
 
-                        {/* 3. Configuration Form */}
+                        {/* 3.5. Edit Active Year Dates Form */}
+                        {mode === 'edit-active' && (
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                if (!selectedYear) return;
+                                setSaving(true);
+                                setSaveError(null);
+                                try {
+                                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://school-sbis.onrender.com"}/academic/years/update-active/${selectedYear.id}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(activationData)
+                                    });
+                                    if (!res.ok) {
+                                        const errData = await res.json().catch(() => ({}));
+                                        setSaveError(errData.error || `Update failed (${res.status})`);
+                                        return;
+                                    }
+                                    showToast.success('Active year dates updated successfully!');
+                                    await fetchYears();
+                                    setMode('view');
+                                } catch (err) {
+                                    console.error(err);
+                                    setSaveError('Network error. Could not update dates.');
+                                } finally {
+                                    setSaving(false);
+                                }
+                            }} className="animate__animated animate__fadeInRight">
+                                <div className="d-flex align-items-center border-bottom pb-3 mb-4">
+                                    <h3 className="h5 mb-0 text-primary-dark">Edit Active Session Dates: {selectedYear.year_name}</h3>
+                                </div>
+
+                                <div className="alert alert-info d-flex align-items-center mb-4">
+                                    <i className="bi bi-info-circle-fill me-2 fs-5"></i>
+                                    <div>You are editing the dates for the <strong>active</strong> academic year. Changes will apply immediately.</div>
+                                </div>
+
+                                <div className="row g-3">
+                                    <div className="col-12 col-md-6">
+                                        <label className="form-label">Session Start Date</label>
+                                        <div className="form-text mb-1">Must be in {selectedYear.year_name.split('-')[0]}</div>
+                                        <input
+                                            type="date" 
+                                            className="form-control" 
+                                            required
+                                            value={activationData.start_date}
+                                            min={minStart} 
+                                            max={maxStart}
+                                            onChange={e => setActivationData({ ...activationData, start_date: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="col-12 col-md-6">
+                                        <label className="form-label">Session End Date</label>
+                                        <div className="form-text mb-1 text-transparent">End Date</div>
+                                        <input 
+                                            type="date" 
+                                            className="form-control" 
+                                            required
+                                            value={activationData.end_date}
+                                            min={activationData.start_date}
+                                            onChange={e => setActivationData({ ...activationData, end_date: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {saveError && (
+                                    <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mt-3">
+                                        <i className="bi bi-exclamation-triangle-fill"></i>
+                                        {saveError}
+                                    </div>
+                                )}
+
+                                <div className="d-flex justify-content-end gap-2 mt-4 flex-wrap">
+                                    <button type="button" className="btn btn-light" onClick={() => setMode('view')}>Cancel</button>
+                                    {hasPermission('settings', 'write') && (
+                                        <button type="submit" className="btn btn-primary-custom" disabled={saving}>
+                                            {saving ? 'Updating...' : 'Update Dates'}
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+                        )}
+
+                        {/* 4. Configuration Form */}
                         {mode === 'configure' && (
                             <form onSubmit={handleConfigure} className="animate__animated animate__fadeInRight">
                                 <div className="d-flex align-items-center border-bottom pb-3 mb-4">
